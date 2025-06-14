@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 import '../providers/settings_provider.dart';
 import '../providers/hydration_provider.dart';
 import '../constants/theme.dart';
+import '../services/notification_service.dart';
 
 class SettingsScreen extends StatelessWidget {
   const SettingsScreen({super.key});
@@ -22,7 +23,7 @@ class SettingsScreen extends StatelessWidget {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      'Target: ${hydration.formattedTargetIntake}',
+                      'Target: ${hydration.formattedTargetIntake}ml',
                       style: Theme.of(context).textTheme.titleMedium,
                     ),
                     const SizedBox(height: 8),
@@ -31,7 +32,7 @@ class SettingsScreen extends StatelessWidget {
                       min: 1000,
                       max: 5000,
                       divisions: 40,
-                      label: '${hydration.targetIntake.toStringAsFixed(0)} ml',
+                      label: '${hydration.targetIntake.toStringAsFixed(0)}ml',
                       onChanged: (value) => hydration.setTargetIntake(value),
                     ),
                   ],
@@ -47,15 +48,15 @@ class SettingsScreen extends StatelessWidget {
                   children: [
                     SwitchListTile(
                       title: const Text('Enable Reminders'),
-                      value: settings.remindersEnabled,
-                      onChanged: settings.setRemindersEnabled,
+                      value: settings.notificationsEnabled,
+                      onChanged: settings.setNotificationsEnabled,
                     ),
-                    if (settings.remindersEnabled) ...[
+                    if (settings.notificationsEnabled) ...[
                       const SizedBox(height: 16),
                       ListTile(
                         title: const Text('Reminder Frequency'),
                         subtitle: Text(
-                          'Every ${settings.reminderFrequency} minutes',
+                          'Every ${settings.frequencyMinutes} minutes',
                         ),
                         trailing: const Icon(Icons.chevron_right),
                         onTap: () => _showFrequencyPicker(context, settings),
@@ -80,15 +81,31 @@ class SettingsScreen extends StatelessWidget {
                           (time) => settings.setEndTime(time),
                         ),
                       ),
-                      SwitchListTile(
-                        title: const Text('Notification Sound'),
-                        value: settings.notificationSound,
-                        onChanged: settings.setNotificationSound,
+                      ListTile(
+                        title: const Text('Sound'),
+                        trailing: Switch(
+                          value: settings.soundEnabled,
+                          onChanged: (value) => settings.setSoundEnabled(value),
+                        ),
                       ),
-                      SwitchListTile(
+                      ListTile(
                         title: const Text('Vibration'),
-                        value: settings.vibration,
-                        onChanged: settings.setVibration,
+                        trailing: Switch(
+                          value: settings.vibrationEnabled,
+                          onChanged: (value) =>
+                              settings.setVibrationEnabled(value),
+                        ),
+                      ),
+                      const Divider(),
+                      ListTile(
+                        leading: const Icon(Icons.notifications_active),
+                        title: const Text('Test Notification'),
+                        subtitle: const Text(
+                            'Send a test notification with snooze options'),
+                        onTap: () {
+                          final notificationService = NotificationService();
+                          notificationService.showTestNotification();
+                        },
                       ),
                     ],
                   ],
@@ -111,9 +128,9 @@ class SettingsScreen extends StatelessWidget {
       children: [
         Text(
           title,
-          style: Theme.of(
-            context,
-          ).textTheme.titleLarge?.copyWith(color: AppTheme.primaryBlue),
+          style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                color: AppTheme.primaryBlue,
+              ),
         ),
         const SizedBox(height: 16),
         Card(
@@ -145,7 +162,7 @@ class SettingsScreen extends StatelessWidget {
                 (minutes) => ListTile(
                   title: Text('Every $minutes minutes'),
                   onTap: () {
-                    settings.setReminderFrequency(minutes);
+                    settings.setFrequencyMinutes(minutes);
                     Navigator.pop(context);
                   },
                 ),

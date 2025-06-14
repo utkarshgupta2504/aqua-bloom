@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../providers/hydration_provider.dart';
+import '../providers/settings_provider.dart';
 import '../widgets/water_button.dart';
 import '../widgets/water_progress.dart';
 import '../widgets/water_adjustment_dialog.dart';
@@ -13,7 +14,7 @@ class HomeScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('AquaBloom'),
+        title: const Text('Aqua Bloom'),
         actions: [
           IconButton(
             icon: const Icon(Icons.settings),
@@ -79,15 +80,16 @@ class HomeScreen extends StatelessWidget {
   }
 
   Widget _buildQuickAddButtons(
-    BuildContext context,
-    HydrationProvider hydration,
-  ) {
+      BuildContext context, HydrationProvider hydration) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         const Text(
           'Quick Add',
-          style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+          style: TextStyle(
+            fontSize: 18,
+            fontWeight: FontWeight.bold,
+          ),
         ),
         const SizedBox(height: 8),
         Row(

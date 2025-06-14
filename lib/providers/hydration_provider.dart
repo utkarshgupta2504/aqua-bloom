@@ -1,8 +1,8 @@
-import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart';
 import 'package:intl/intl.dart';
 import '../services/storage_service.dart';
 
-class HydrationProvider extends ChangeNotifier {
+class HydrationProvider with ChangeNotifier {
   final StorageService _storage;
   double _currentIntake = 0.0;
   double _targetIntake = 2500.0; // Default 2.5L
@@ -10,22 +10,21 @@ class HydrationProvider extends ChangeNotifier {
   String? _lastLogDate;
 
   HydrationProvider(this._storage) {
-    _loadHydrationData();
+    _loadData();
   }
 
   double get currentIntake => _currentIntake;
   double get targetIntake => _targetIntake;
   double? get lastIntake => _lastIntake;
   double get progress => _currentIntake / _targetIntake;
-  String get formattedCurrentIntake =>
-      '${_currentIntake.toStringAsFixed(0)} ml';
-  String get formattedTargetIntake => '${_targetIntake.toStringAsFixed(0)} ml';
+  String get formattedCurrentIntake => '${_currentIntake.toStringAsFixed(0)}';
+  String get formattedTargetIntake => '${_targetIntake.toStringAsFixed(0)}';
   String get progressPercentage => '${(progress * 100).toStringAsFixed(0)}%';
 
-  Future<void> _loadHydrationData() async {
-    _currentIntake = _storage.getCurrentIntake();
-    _targetIntake = _storage.getTargetIntake();
-    _lastLogDate = _storage.getLastLogDate();
+  Future<void> _loadData() async {
+    _currentIntake = await _storage.getCurrentIntake();
+    _targetIntake = await _storage.getTargetIntake();
+    _lastLogDate = await _storage.getLastLogDate();
     _checkAndResetDaily();
     notifyListeners();
   }
@@ -61,10 +60,8 @@ class HydrationProvider extends ChangeNotifier {
 
   Future<void> undoLastIntake() async {
     if (_lastIntake != null) {
-      _currentIntake = (_currentIntake - _lastIntake!).clamp(
-        0.0,
-        double.infinity,
-      );
+      _currentIntake =
+          (_currentIntake - _lastIntake!).clamp(0.0, double.infinity);
       await _storage.saveCurrentIntake(_currentIntake);
       _lastIntake = null; // Clear the last intake after undoing
       notifyListeners();

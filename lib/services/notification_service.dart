@@ -1,130 +1,242 @@
+import 'package:flutter/material.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:timezone/timezone.dart' as tz;
 import 'package:timezone/data/latest.dart' as tz;
+import 'dart:io' show Platform;
+
+@pragma('vm:entry-point')
+void notificationTapBackground(NotificationResponse notificationResponse) {
+  // Handle background notification tap
+}
 
 class NotificationService {
-  static final NotificationService _instance = NotificationService._internal();
+  static final NotificationService _instance = NotificationService._();
   factory NotificationService() => _instance;
-  NotificationService._internal();
+  NotificationService._();
 
   final FlutterLocalNotificationsPlugin _notifications =
       FlutterLocalNotificationsPlugin();
+  static const String _channelId = 'water_reminder_channel';
+  static const String _channelName = 'Water Reminders';
+  static const String _channelDescription =
+      'Notifications for water intake reminders';
 
   Future<void> initialize() async {
     tz.initializeTimeZones();
 
-    const androidSettings = AndroidInitializationSettings(
-      '@mipmap/ic_launcher',
-    );
-    const iosSettings = DarwinInitializationSettings(
+    const androidSettings =
+        AndroidInitializationSettings('@mipmap/ic_launcher');
+    final iosSettings = DarwinInitializationSettings(
       requestAlertPermission: true,
       requestBadgePermission: true,
       requestSoundPermission: true,
+      notificationCategories: [
+        DarwinNotificationCategory(
+          'water_reminder',
+          actions: [
+            DarwinNotificationAction.plain('snooze_15', 'Snooze 15m'),
+            DarwinNotificationAction.plain('snooze_30', 'Snooze 30m'),
+            DarwinNotificationAction.plain('snooze_60', 'Snooze 1h'),
+          ],
+        ),
+      ],
     );
-    const macosSettings = DarwinInitializationSettings(
+    final macSettings = DarwinInitializationSettings(
       requestAlertPermission: true,
       requestBadgePermission: true,
       requestSoundPermission: true,
+      notificationCategories: [
+        DarwinNotificationCategory(
+          'water_reminder',
+          actions: [
+            DarwinNotificationAction.plain('snooze_15', 'Snooze 15m'),
+            DarwinNotificationAction.plain('snooze_30', 'Snooze 30m'),
+            DarwinNotificationAction.plain('snooze_60', 'Snooze 1h'),
+          ],
+        ),
+      ],
     );
 
-    const initSettings = InitializationSettings(
+    final initSettings = InitializationSettings(
       android: androidSettings,
       iOS: iosSettings,
-      macOS: macosSettings,
+      macOS: macSettings,
     );
 
-    await _notifications.initialize(initSettings);
-  }
+    await _notifications.initialize(
+      initSettings,
+      onDidReceiveNotificationResponse: _onNotificationTapped,
+      onDidReceiveBackgroundNotificationResponse: notificationTapBackground,
+    );
 
-  Future<void> scheduleNotifications({
-    required int frequencyMinutes,
-    required String startTime,
-    required String endTime,
-    required bool soundEnabled,
-    required bool vibrationEnabled,
-  }) async {
-    // Cancel existing notifications
-    await _notifications.cancelAll();
-
-    // Parse start and end times
-    final startParts = startTime.split(':');
-    final endParts = endTime.split(':');
-
-    final startHour = int.parse(startParts[0]);
-    final startMinute = int.parse(startParts[1]);
-    final endHour = int.parse(endParts[0]);
-    final endMinute = int.parse(endParts[1]);
-
-    // Calculate number of notifications
-    final startMinutes = startHour * 60 + startMinute;
-    final endMinutes = endHour * 60 + endMinute;
-    final totalMinutes = endMinutes - startMinutes;
-    final numNotifications = (totalMinutes / frequencyMinutes).floor();
-
-    // Schedule notifications
-    for (var i = 0; i < numNotifications; i++) {
-      final notificationTime = startMinutes + (i * frequencyMinutes);
-      final hour = (notificationTime ~/ 60) % 24;
-      final minute = notificationTime % 60;
-
-      final now = DateTime.now();
-      var scheduledDate = DateTime(now.year, now.month, now.day, hour, minute);
-
-      // If the time has passed today, schedule for tomorrow
-      if (scheduledDate.isBefore(now)) {
-        scheduledDate = scheduledDate.add(const Duration(days: 1));
-      }
-
-      await _notifications.zonedSchedule(
-        i,
-        'Time to Hydrate! 💧',
-        _getRandomMessage(),
-        tz.TZDateTime.from(scheduledDate, tz.local),
-        NotificationDetails(
-          android: AndroidNotificationDetails(
-            'water_reminder_channel',
-            'Water Reminders',
-            channelDescription: 'Reminders to drink water',
-            importance: Importance.high,
-            priority: Priority.high,
-            sound: soundEnabled
-                ? RawResourceAndroidNotificationSound('notification')
-                : null,
-            enableVibration: vibrationEnabled,
-          ),
-          iOS: DarwinNotificationDetails(
-            sound: soundEnabled ? 'notification.wav' : null,
-            presentSound: soundEnabled,
-            presentBadge: true,
-            presentAlert: true,
-          ),
-          macOS: DarwinNotificationDetails(
-            sound: soundEnabled ? 'notification.wav' : null,
-            presentSound: soundEnabled,
-            presentBadge: true,
-            presentAlert: true,
-          ),
-        ),
-        androidScheduleMode: AndroidScheduleMode.exactAllowWhileIdle,
-        uiLocalNotificationDateInterpretation:
-            UILocalNotificationDateInterpretation.absoluteTime,
-        matchDateTimeComponents: DateTimeComponents.time,
-      );
+    // Request permissions
+    if (Platform.isIOS) {
+      await _notifications
+          .resolvePlatformSpecificImplementation<
+              IOSFlutterLocalNotificationsPlugin>()
+          ?.requestPermissions(
+            alert: true,
+            badge: true,
+            sound: true,
+          );
+    } else if (Platform.isMacOS) {
+      await _notifications
+          .resolvePlatformSpecificImplementation<
+              MacOSFlutterLocalNotificationsPlugin>()
+          ?.requestPermissions(
+            alert: true,
+            badge: true,
+            sound: true,
+          );
     }
   }
 
-  String _getRandomMessage() {
-    final messages = [
-      'Stay hydrated for better performance! 💪',
-      'Time for a refreshing sip! 🌊',
-      'Your body needs water! 💧',
-      'Keep the momentum going! Stay hydrated! 🚀',
-      'Water break time! 💦',
-    ];
-    return messages[DateTime.now().millisecondsSinceEpoch % messages.length];
+  Future<void> scheduleNotification({
+    required int id,
+    required String title,
+    required String body,
+    required DateTime scheduledTime,
+    String? payload,
+  }) async {
+    final androidDetails = AndroidNotificationDetails(
+      _channelId,
+      _channelName,
+      channelDescription: _channelDescription,
+      importance: Importance.max,
+      priority: Priority.high,
+      fullScreenIntent: true,
+      category: AndroidNotificationCategory.alarm,
+      visibility: NotificationVisibility.public,
+      sound: const RawResourceAndroidNotificationSound('notification'),
+      enableVibration: true,
+      playSound: true,
+      enableLights: true,
+      color: const Color(0xFF2196F3),
+      ledColor: const Color(0xFF2196F3),
+      ledOnMs: 1000,
+      ledOffMs: 500,
+      actions: [
+        const AndroidNotificationAction('snooze_15', 'Snooze 15m'),
+        const AndroidNotificationAction('snooze_30', 'Snooze 30m'),
+        const AndroidNotificationAction('snooze_60', 'Snooze 1h'),
+      ],
+    );
+
+    final iosDetails = DarwinNotificationDetails(
+      presentAlert: true,
+      presentBadge: true,
+      presentSound: true,
+      interruptionLevel: InterruptionLevel.timeSensitive,
+      categoryIdentifier: 'water_reminder',
+    );
+
+    final macDetails = DarwinNotificationDetails(
+      presentAlert: true,
+      presentBadge: true,
+      presentSound: true,
+      categoryIdentifier: 'water_reminder',
+    );
+
+    final details = NotificationDetails(
+      android: androidDetails,
+      iOS: iosDetails,
+      macOS: macDetails,
+    );
+
+    await _notifications.zonedSchedule(
+      id,
+      title,
+      body,
+      tz.TZDateTime.from(scheduledTime, tz.local),
+      details,
+      androidScheduleMode: AndroidScheduleMode.exactAllowWhileIdle,
+      matchDateTimeComponents: DateTimeComponents.time,
+      payload: payload ?? id.toString(),
+    );
+  }
+
+  Future<void> snoozeNotification(int id, Duration duration) async {
+    final now = DateTime.now();
+    final snoozeTime = now.add(duration);
+    await scheduleNotification(
+      id: id,
+      title: 'Time to Hydrate! 💧 (Snoozed)',
+      body: 'Your snoozed reminder to stay hydrated!',
+      scheduledTime: snoozeTime,
+      payload: id.toString(),
+    );
+  }
+
+  Future<void> cancelNotification(int id) async {
+    await _notifications.cancel(id);
   }
 
   Future<void> cancelAllNotifications() async {
     await _notifications.cancelAll();
+  }
+
+  Future<void> showTestNotification() async {
+    const androidDetails = AndroidNotificationDetails(
+      _channelId,
+      _channelName,
+      channelDescription: _channelDescription,
+      importance: Importance.max,
+      priority: Priority.high,
+      fullScreenIntent: true,
+      category: AndroidNotificationCategory.alarm,
+      visibility: NotificationVisibility.public,
+      // sound: RawResourceAndroidNotificationSound('notification'),
+      enableVibration: true,
+      playSound: true,
+      enableLights: true,
+      color: Color(0xFF2196F3),
+      ledColor: Color(0xFF2196F3),
+      ledOnMs: 1000,
+      ledOffMs: 500,
+      actions: [
+        AndroidNotificationAction('snooze_15', 'Snooze 15m'),
+        AndroidNotificationAction('snooze_30', 'Snooze 30m'),
+        AndroidNotificationAction('snooze_60', 'Snooze 1h'),
+      ],
+    );
+
+    const iosDetails = DarwinNotificationDetails(
+      presentAlert: true,
+      presentBadge: true,
+      presentSound: true,
+      interruptionLevel: InterruptionLevel.timeSensitive,
+      categoryIdentifier: 'water_reminder',
+    );
+
+    const macDetails = DarwinNotificationDetails(
+      presentAlert: true,
+      presentBadge: true,
+      presentSound: true,
+      categoryIdentifier: 'water_reminder',
+    );
+
+    const details = NotificationDetails(
+      android: androidDetails,
+      iOS: iosDetails,
+      macOS: macDetails,
+    );
+
+    await _notifications.show(
+      999, // Test notification ID
+      'Test Notification 💧',
+      'This is a test notification for Aqua Bloom',
+      details,
+      payload: '999',
+    );
+  }
+
+  void _onNotificationTapped(NotificationResponse response) {
+    if (response.actionId?.startsWith('snooze_') ?? false) {
+      final minutes = int.parse(response.actionId!.split('_')[1]);
+      snoozeNotification(
+        int.tryParse(response.payload ?? '0') ?? 0,
+        Duration(minutes: minutes),
+      );
+    }
   }
 }
